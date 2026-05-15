@@ -6,7 +6,7 @@
   "redirectUri": "https://grimy-ferry-humid.ngrok-free.dev/index.html",
   "practiceCode": "JAFJCD",
   "audience": "https://fhir4.healow.com/fhir/r4/JAFJCD",
-  "scope": "patient/Patient.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Immunization.read online_access",
+  "scope": "patient/Patient.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Immunization.read patient/Condition.read?category=http://terminology.hl7.org/CodeSystem/condition-category|problem-list-item online_access",
   "grantType": "authorization_code",
   "pkceMethod": "S256",
   "tokenClientAuth": "basic"
