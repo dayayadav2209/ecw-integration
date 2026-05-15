@@ -1,0 +1,13 @@
+{
+  "authorizeEndpoint": "https://oauthserver.eclinicalworks.com/oauth/oauth2/authorize",
+  "tokenEndpoint": "https://oauthserver.eclinicalworks.com/oauth/oauth2/token",
+  "clientId": "pIsYBIyBR5Bjww3D9EpH4K97j0RnSYn0S8sIbjh00PU",
+  "clientSecret": "I2e2uPy-0ASgVZZ5oWXLXdnZ_nnJH8tq6954RB7XLPQxr-bfuhhZkiYmcuEa7kBI",
+  "redirectUri": "https://grimy-ferry-humid.ngrok-free.dev/index.html",
+  "practiceCode": "JAFJCD",
+  "audience": "https://fhir4.healow.com/fhir/r4/JAFJCD",
+  "scope": "patient/Patient.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Immunization.read online_access",
+  "grantType": "authorization_code",
+  "pkceMethod": "S256",
+  "tokenClientAuth": "basic"
+}

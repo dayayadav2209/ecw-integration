@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>eClinicalWorks OAuth Test</title>
+</head>
+<body>
+  <h2>eClinicalWorks Login Test</h2>
+
+  <button id="loginBtn" type="button" disabled>
+    Login with eClinicalWorks
+  </button>
+
+  <div id="log"></div>
+
+  <script>
+    const TOKEN_API = "/api/oauth/token";
+    const CONFIG_API = "/api/oauth/config";
+
+    let CONFIG = null;
+
+    const logEl = document.getElementById("log");
+    const loginBtn = document.getElementById("loginBtn");
+
+    function log(message, color = "black") {
+      logEl.innerHTML += `<p style="color:${color};">${message}</p>`;
+    }
+
+    function getQueryParam(name) {
+      return new URLSearchParams(window.location.search).get(name);
+    }
+
+    function stripOAuthFromUrl() {
+      history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    }
+
+    function base64UrlEncode(bytes) {
+      return btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    }
+
+    function generateCodeVerifier(length = 64) {
+      const bytes = new Uint8Array(length);
+      crypto.getRandomValues(bytes);
+      return base64UrlEncode(bytes).slice(0, length);
+    }
+
+    async function generateCodeChallenge(verifier) {
+      const data = new TextEncoder().encode(verifier);
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return base64UrlEncode(new Uint8Array(digest));
+    }
+
+    function saveOAuthSession(state, verifier) {
+      localStorage.setItem(
+        "ecw_oauth_" + state,
+        JSON.stringify({ verifier, createdAt: Date.now() })
+      );
+      sessionStorage.setItem("ecw_state", state);
+      sessionStorage.setItem("ecw_verifier", verifier);
+    }
+
+    function loadOAuthSession(returnedState) {
+      if (!returnedState) return null;
+
+      const raw = localStorage.getItem("ecw_oauth_" + returnedState);
+      if (raw) {
+        try {
+          const { verifier } = JSON.parse(raw);
+          if (verifier) return verifier;
+        } catch {
+          localStorage.removeItem("ecw_oauth_" + returnedState);
+        }
+      }
+
+      if (sessionStorage.getItem("ecw_state") === returnedState) {
+        return sessionStorage.getItem("ecw_verifier");
+      }
+
+      return null;
+    }
+
+    function clearOAuthSession(state) {
+      if (state) localStorage.removeItem("ecw_oauth_" + state);
+      sessionStorage.removeItem("ecw_state");
+      sessionStorage.removeItem("ecw_verifier");
+    }
+
+    async function loadConfig() {
+      const res = await fetch(CONFIG_API);
+      if (!res.ok) throw new Error("Failed to load OAuth config from server");
+      CONFIG = await res.json();
+      loginBtn.disabled = false;
+    }
+
+    async function loginECW() {
+      stripOAuthFromUrl();
+      logEl.innerHTML = "";
+
+      const verifier = generateCodeVerifier();
+      const challenge = await generateCodeChallenge(verifier);
+      const state = crypto.randomUUID();
+
+      saveOAuthSession(state, verifier);
+
+      const authUrl =
+        CONFIG.authorizeEndpoint +
+        "?response_type=code" +
+        "&client_id=" +
+        encodeURIComponent(CONFIG.clientId) +
+        "&redirect_uri=" +
+        encodeURIComponent(CONFIG.redirectUri) +
+        "&scope=" +
+        encodeURIComponent(CONFIG.scope) +
+        "&state=" +
+        encodeURIComponent(state) +
+        "&code_challenge=" +
+        encodeURIComponent(challenge) +
+        "&code_challenge_method=S256" +
+        "&practice_code=" +
+        encodeURIComponent(CONFIG.practiceCode) +
+        "&aud=" +
+        encodeURIComponent(CONFIG.audience);
+
+      window.location.href = authUrl;
+    }
+
+    async function exchangeCodeForToken(code, state, verifier) {
+      try {
+        log("Calling server token API…");
+
+        const response = await fetch(TOKEN_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            code_verifier: verifier,
+            redirect_uri: CONFIG.redirectUri
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          log("Token request failed: " + response.status, "red");
+          log("<pre>" + JSON.stringify(data, null, 2) + "</pre>", "red");
+          return;
+        }
+
+        clearOAuthSession(state);
+        log("Access token generated successfully!", "green");
+        log("Access Token: " + data.access_token, "green");
+        log("<pre>" + JSON.stringify(data, null, 2) + "</pre>");
+      } catch (err) {
+        console.error(err);
+        log("Error: " + err.message, "red");
+      }
+    }
+
+    async function handleCallback() {
+      const code = getQueryParam("code");
+      const returnedState = getQueryParam("state");
+      const oauthError = getQueryParam("error");
+
+      if (!code && !oauthError) return;
+
+      stripOAuthFromUrl();
+
+      if (oauthError) {
+        log("Authorization error: " + oauthError, "red");
+        return;
+      }
+
+      const verifier = loadOAuthSession(returnedState);
+
+      if (!verifier) {
+        log("Invalid or expired state. Click Login again in this tab.", "red");
+        return;
+      }
+
+      log("State verified. Authorization code received.", "green");
+      await exchangeCodeForToken(code, returnedState, verifier);
+    }
+
+    loginBtn.addEventListener("click", loginECW);
+
+    loadConfig()
+      .then(() => {
+        log("Config loaded from server. redirect_uri: " + CONFIG.redirectUri);
+        handleCallback();
+      })
+      .catch((err) => {
+        log("Start the server first: npm install && npm start — " + err.message, "red");
+      });
+  </script>
+</body>
+</html>
